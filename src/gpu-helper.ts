@@ -36,7 +36,7 @@ export class GPUHelper<T extends string> {
 
     const device = await adapter.requestDevice();
 
-    return new this(adapter, device, initiator);
+    return new this(device, initiator);
   }
 
   canvas: HTMLCanvasElement;
@@ -57,32 +57,22 @@ export class GPUHelper<T extends string> {
 
   get presentationSize(): [number, number] {
     const { clientWidth, clientHeight } = this.canvas;
-    return [clientWidth * devicePixelRatio, clientHeight * devicePixelRatio];
+    return [clientWidth, clientHeight];
   }
 
   private frame: FrameRequestCallback;
 
-  constructor(
-    adapter: GPUAdapter,
-    public device: GPUDevice,
-    initiator: GPUInitiator<T>
-  ) {
+  constructor(public device: GPUDevice, initiator: GPUInitiator<T>) {
     const { canvas, frame } = initiator;
     this.canvas = canvas;
     this.ctx = canvas.getContext('webgpu')!;
 
-    const presentationSize = [
-      canvas.clientWidth * devicePixelRatio,
-      canvas.clientHeight * devicePixelRatio,
-    ];
-
-    this.presentationFormat = this.ctx.getPreferredFormat(adapter);
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
     this.ctx.configure({
       device,
       format: this.presentationFormat,
-      size: presentationSize,
-      compositingAlphaMode: 'premultiplied',
+      alphaMode: 'premultiplied',
     });
 
     this.createBufferAndBindGroup(initiator.bufferAndBindGroupDescriptor);

@@ -6,9 +6,7 @@ struct VertexOutput {
     @location(0) color: vec4<f32>,
 }
 
-let PI = 3.1415926;
-
-@stage(vertex)
+@vertex
 fn main(@builtin(instance_index) instance_idx: u32, @location(0) position: vec3<f32>, @location(1) color: vec4<f32>) -> VertexOutput {
     var output: VertexOutput;
     output.position = transformMatrics[instance_idx] * vec4<f32>(position, 1.0);
