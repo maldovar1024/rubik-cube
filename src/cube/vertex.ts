@@ -1,4 +1,4 @@
-export const colors = [
+const colors = [
   [1.0, 1.0, 1.0, 1.0], // Front face: white
   [1.0, 0.0, 117 / 255, 1.0], // Back face: red
   [0.0, 1.0, 0.0, 1.0], // Top face: green
@@ -45,8 +45,8 @@ export const vertices = [
   [-1.0, 1.0, -1.0],
 ].flatMap((pos, idx) => pos.concat(colors[Math.floor(idx / 4)]));
 
-export const vertexSize = Float32Array.BYTES_PER_ELEMENT * 7;
-export const colorOffset = Float32Array.BYTES_PER_ELEMENT * 3;
+const vertexSize = Float32Array.BYTES_PER_ELEMENT * 7;
+const colorOffset = Float32Array.BYTES_PER_ELEMENT * 3;
 
 export const indices = [
   // front
@@ -68,3 +68,20 @@ export const indices = [
   [20, 21, 22],
   [20, 22, 23],
 ].flat();
+
+export const vertexBufferLayout: GPUVertexBufferLayout = {
+  arrayStride: vertexSize,
+  stepMode: 'vertex',
+  attributes: [
+    {
+      offset: 0,
+      shaderLocation: 0,
+      format: 'float32x3',
+    },
+    {
+      offset: colorOffset,
+      shaderLocation: 1,
+      format: 'float32x4',
+    },
+  ],
+};

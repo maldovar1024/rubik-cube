@@ -5,12 +5,11 @@ import { mat4, vec3 } from 'gl-matrix';
 
 import { Camera } from './camera';
 import {
-  colorOffset,
   indices,
   instanceCount,
   instanceTransform,
   matrixF32Count,
-  vertexSize,
+  vertexBufferLayout,
   vertices,
 } from './cube';
 import { GPUHelper } from './gpu-helper';
@@ -166,24 +165,7 @@ const instance = await GPUHelper.create({
   pipelineDescriptor: {
     vertex: {
       code: vert,
-      buffers: [
-        {
-          arrayStride: vertexSize,
-          stepMode: 'vertex',
-          attributes: [
-            {
-              offset: 0,
-              shaderLocation: 0,
-              format: 'float32x3',
-            },
-            {
-              offset: colorOffset,
-              shaderLocation: 1,
-              format: 'float32x4',
-            },
-          ],
-        },
-      ],
+      buffers: [vertexBufferLayout],
     },
     fragment: {
       code: frag,
