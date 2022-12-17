@@ -1,15 +1,16 @@
-export interface BufferInitiator {
+export interface BufferDescriptorBase<Name extends string> {
+  bufferName: Name;
   bufferDescriptor: GPUBufferDescriptor;
-  init?: {
-    ctor: Float32ArrayConstructor | Uint16ArrayConstructor;
-    value: ArrayLike<number>;
-  };
 }
 
-interface BufferAndBindGroupDescriptor<T extends string> {
-  bufferName: T;
-  bufferInitiator: BufferInitiator;
-  layout?: Omit<GPUBindGroupLayoutEntry, 'binding'>;
+export interface BufferInitDescriptor<Name extends string>
+  extends BufferDescriptorBase<Name> {
+  contents: ArrayBufferLike;
+}
+
+interface BufferAndBindGroupDescriptor<Name extends string>
+  extends BufferDescriptorBase<Name> {
+  layout: Omit<GPUBindGroupLayoutEntry, 'binding'>;
 }
 
 interface PipelineDescriptor {
@@ -22,15 +23,27 @@ interface PipelineDescriptor {
   };
 }
 
-interface GPUInitiator<T extends string> {
+interface GPUInitiator<
+  BufferInitName extends string,
+  BufferName extends string
+> {
   canvas: HTMLCanvasElement;
-  bufferAndBindGroupDescriptor: BufferAndBindGroupDescriptor<T>[];
+  bufferInitDescriptors: BufferInitDescriptor<BufferInitName>[];
+  bufferAndBindGroupDescriptor: BufferAndBindGroupDescriptor<BufferName>[];
   pipelineDescriptor: PipelineDescriptor;
-  frame: (this: GPUHelper<T>, time: DOMHighResTimeStamp) => void;
+  frame: (
+    this: GPUHelper<BufferInitName, BufferName>,
+    time: DOMHighResTimeStamp
+  ) => void;
 }
 
-export class GPUHelper<T extends string> {
-  static async create<T extends string>(initiator: GPUInitiator<T>) {
+export class GPUHelper<
+  BufferInitName extends string,
+  BufferName extends string
+> {
+  static async create<BufferInitName extends string, BufferName extends string>(
+    initiator: GPUInitiator<BufferInitName, BufferName>
+  ) {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) throw Error("Couldn't request WebGPU adapter.");
 
@@ -44,8 +57,8 @@ export class GPUHelper<T extends string> {
 
   presentationFormat: GPUTextureFormat;
 
-  buffers!: {
-    [name in T]: GPUBuffer;
+  buffers = {} as {
+    [name in BufferInitName | BufferName]: GPUBuffer;
   };
 
   bindGroupLayout!: GPUBindGroupLayout;
@@ -62,7 +75,10 @@ export class GPUHelper<T extends string> {
 
   private frame: FrameRequestCallback;
 
-  constructor(public device: GPUDevice, initiator: GPUInitiator<T>) {
+  constructor(
+    public device: GPUDevice,
+    initiator: GPUInitiator<BufferInitName, BufferName>
+  ) {
     const { canvas, frame } = initiator;
     this.canvas = canvas;
     this.ctx = canvas.getContext('webgpu')!;
@@ -75,6 +91,7 @@ export class GPUHelper<T extends string> {
       alphaMode: 'premultiplied',
     });
 
+    this.createBufferInit(initiator.bufferInitDescriptors);
     this.createBufferAndBindGroup(initiator.bufferAndBindGroupDescriptor);
 
     this.createPipeline(initiator.pipelineDescriptor);
@@ -107,32 +124,43 @@ export class GPUHelper<T extends string> {
     requestAnimationFrame(this.draw);
   };
 
-  private createBuffer(initiator: BufferInitiator) {
-    const { bufferDescriptor, init } = initiator;
+  private createBufferInit(
+    descriptors: BufferInitDescriptor<BufferInitName>[]
+  ) {
+    Object.assign(
+      this.buffers,
+      Object.fromEntries(
+        descriptors.map(({ bufferName, bufferDescriptor, contents }) => {
+          const buffer = this.device.createBuffer({
+            ...bufferDescriptor,
+            mappedAtCreation: true,
+          });
+          new Uint8Array(buffer.getMappedRange()).set(new Uint8Array(contents));
+          buffer.unmap();
 
-    bufferDescriptor.mappedAtCreation = init !== undefined;
-
-    const buffer = this.device.createBuffer(bufferDescriptor);
-
-    if (init) {
-      new init.ctor(buffer.getMappedRange()).set(init.value);
-      buffer.unmap();
-    }
-
-    return buffer;
+          return [bufferName, buffer] as [BufferInitName, GPUBuffer];
+        })
+      )
+    );
   }
 
   private createBufferAndBindGroup(
-    descriptors: BufferAndBindGroupDescriptor<T>[]
+    descriptors: BufferAndBindGroupDescriptor<BufferName>[]
   ) {
     const { device } = this;
 
-    this.buffers = Object.fromEntries(
-      descriptors.map(({ bufferName, bufferInitiator }) => [
-        bufferName,
-        this.createBuffer(bufferInitiator),
-      ])
-    ) as { [name in T]: GPUBuffer };
+    Object.assign(
+      this.buffers,
+      Object.fromEntries(
+        descriptors.map(
+          ({ bufferName, bufferDescriptor }) =>
+            [bufferName, device.createBuffer(bufferDescriptor)] as [
+              BufferName,
+              GPUBuffer
+            ]
+        )
+      )
+    );
 
     this.bindGroupLayout = device.createBindGroupLayout({
       entries: descriptors.flatMap(({ layout }, idx) =>
