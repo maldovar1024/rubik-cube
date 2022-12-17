@@ -1,12 +1,19 @@
-import frag from './frag.wgsl?raw';
-import vert from './vert.wgsl?raw';
+import frag from './shaders/frag.wgsl?raw';
+import vert from './shaders/vert.wgsl?raw';
 
 import { mat4, vec3 } from 'gl-matrix';
 
 import { Camera } from './camera';
-import { colorOffset, indices, vertexSize, vertices } from './cube';
+import {
+  colorOffset,
+  indices,
+  instanceCount,
+  instanceTransform,
+  matrixF32Count,
+  vertexSize,
+  vertices,
+} from './cube';
 import { GPUHelper } from './gpu-helper';
-import { instanceCount, instanceTransform, matrixF32Count } from './instance';
 import { Operation } from './operation';
 
 import './style.css';
