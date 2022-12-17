@@ -66,7 +66,7 @@ export class GPUHelper<
 
   pipeline!: GPURenderPipeline;
 
-  renderPassDescriptor;
+  depthTexture!: { texture: GPUTexture; view: GPUTextureView };
 
   get presentationSize(): [number, number] {
     const { clientWidth, clientHeight } = this.canvas;
@@ -91,26 +91,12 @@ export class GPUHelper<
       alphaMode: 'premultiplied',
     });
 
+    this.createDepthTexture();
+
     this.createBufferInit(initiator.bufferInitDescriptors);
     this.createBufferAndBindGroup(initiator.bufferAndBindGroupDescriptor);
 
     this.createPipeline(initiator.pipelineDescriptor);
-
-    this.renderPassDescriptor = {
-      colorAttachments: [
-        {
-          clearValue: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        },
-      ],
-      depthStencilAttachment: {
-        view: this.createDepthStencilView(),
-        depthClearValue: 1.0,
-        depthLoadOp: 'clear',
-        depthStoreOp: 'store',
-      },
-    } as const;
 
     this.frame = frame;
   }
@@ -119,10 +105,43 @@ export class GPUHelper<
     requestAnimationFrame(this.draw);
   }
 
+  getRenderPassDescriptor(
+    currentTextureView: GPUTextureView
+  ): GPURenderPassDescriptor {
+    return {
+      colorAttachments: [
+        {
+          view: currentTextureView,
+          clearValue: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+      depthStencilAttachment: {
+        view: this.depthTexture.view,
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    };
+  }
+
   draw: FrameRequestCallback = (time) => {
     this.frame(time);
     requestAnimationFrame(this.draw);
   };
+
+  private createDepthTexture() {
+    const texture = this.device.createTexture({
+      size: this.presentationSize,
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    this.depthTexture = {
+      texture,
+      view: texture.createView(),
+    };
+  }
 
   private createBufferInit(
     descriptors: BufferInitDescriptor<BufferInitName>[]
@@ -204,14 +223,5 @@ export class GPUHelper<
         format: 'depth24plus',
       },
     });
-  }
-
-  private createDepthStencilView() {
-    const texture = this.device.createTexture({
-      size: this.presentationSize,
-      format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    return texture.createView();
   }
 }

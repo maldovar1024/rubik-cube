@@ -185,19 +185,9 @@ const instance = await GPUHelper.create({
     const commandEncoder = device.createCommandEncoder();
     const textureView = ctx.getCurrentTexture().createView();
 
-    const renderPassDescriptor: GPURenderPassDescriptor = {
-      colorAttachments: [
-        {
-          view: textureView,
-          clearValue: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        },
-      ],
-      depthStencilAttachment: this.renderPassDescriptor.depthStencilAttachment,
-    };
-
-    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+    const passEncoder = commandEncoder.beginRenderPass(
+      this.getRenderPassDescriptor(textureView)
+    );
 
     passEncoder.setPipeline(pipeline);
     passEncoder.setBindGroup(0, bindGroup);
