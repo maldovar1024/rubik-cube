@@ -108,14 +108,30 @@ const start = performance.now() / 1000;
 
 const instance = await GPUHelper.create({
   canvas,
+  bufferInitDescriptors: [
+    {
+      bufferName: 'vertexBuffer',
+      bufferDescriptor: {
+        size: Float32Array.BYTES_PER_ELEMENT * vertices.length,
+        usage: GPUBufferUsage.VERTEX,
+      },
+      contents: vertices.buffer,
+    },
+    {
+      bufferName: 'indexBuffer',
+      bufferDescriptor: {
+        size: Uint16Array.BYTES_PER_ELEMENT * indices.length,
+        usage: GPUBufferUsage.INDEX,
+      },
+      contents: indices.buffer,
+    },
+  ],
   bufferAndBindGroupDescriptor: [
     {
       bufferName: 'timeUniformBuffer',
-      bufferInitiator: {
-        bufferDescriptor: {
-          size: Float32Array.BYTES_PER_ELEMENT,
-          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-        },
+      bufferDescriptor: {
+        size: Float32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
       },
       layout: {
         visibility: GPUShaderStage.VERTEX,
@@ -124,41 +140,13 @@ const instance = await GPUHelper.create({
     },
     {
       bufferName: 'transformationMatricesBuffer',
-      bufferInitiator: {
-        bufferDescriptor: {
-          size: instanceTransformMatrices.byteLength,
-          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        },
+      bufferDescriptor: {
+        size: instanceTransformMatrices.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       },
       layout: {
         visibility: GPUShaderStage.VERTEX,
         buffer: { type: 'uniform' },
-      },
-    },
-    {
-      bufferName: 'vertexBuffer',
-      bufferInitiator: {
-        bufferDescriptor: {
-          size: Float32Array.BYTES_PER_ELEMENT * vertices.length,
-          usage: GPUBufferUsage.VERTEX,
-        },
-        init: {
-          ctor: Float32Array,
-          value: vertices,
-        },
-      },
-    },
-    {
-      bufferName: 'indexBuffer',
-      bufferInitiator: {
-        bufferDescriptor: {
-          size: Uint16Array.BYTES_PER_ELEMENT * indices.length,
-          usage: GPUBufferUsage.INDEX,
-        },
-        init: {
-          ctor: Uint16Array,
-          value: indices,
-        },
       },
     },
   ],
