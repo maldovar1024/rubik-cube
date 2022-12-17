@@ -29,7 +29,7 @@ interface GPUInitiator<
 > {
   canvas: HTMLCanvasElement;
   bufferInitDescriptors: BufferInitDescriptor<BufferInitName>[];
-  bufferAndBindGroupDescriptor: BufferAndBindGroupDescriptor<BufferName>[];
+  bufferAndBindGroupDescriptor: BufferAndBindGroupDescriptor<BufferName>[][];
   pipelineDescriptor: PipelineDescriptor;
   frame: (
     this: GPUHelper<BufferInitName, BufferName>,
@@ -61,8 +61,8 @@ export class GPUHelper<
     [name in BufferInitName | BufferName]: GPUBuffer;
   };
 
-  bindGroupLayout!: GPUBindGroupLayout;
-  bindGroup!: GPUBindGroup;
+  bindGroupLayouts!: GPUBindGroupLayout[];
+  bindGroups!: GPUBindGroup[];
 
   pipeline!: GPURenderPipeline;
 
@@ -164,47 +164,53 @@ export class GPUHelper<
   }
 
   private createBufferAndBindGroup(
-    descriptors: BufferAndBindGroupDescriptor<BufferName>[]
+    descriptors: BufferAndBindGroupDescriptor<BufferName>[][]
   ) {
     const { device } = this;
 
     Object.assign(
       this.buffers,
       Object.fromEntries(
-        descriptors.map(
-          ({ bufferName, bufferDescriptor }) =>
-            [bufferName, device.createBuffer(bufferDescriptor)] as [
-              BufferName,
-              GPUBuffer
-            ]
-        )
+        descriptors
+          .flat()
+          .map(
+            ({ bufferName, bufferDescriptor }) =>
+              [bufferName, device.createBuffer(bufferDescriptor)] as [
+                BufferName,
+                GPUBuffer
+              ]
+          )
       )
     );
 
-    this.bindGroupLayout = device.createBindGroupLayout({
-      entries: descriptors.flatMap(({ layout }, idx) =>
-        layout ? { binding: idx, ...layout } : []
-      ),
-    });
+    this.bindGroupLayouts = descriptors.map((groupDescriptor) =>
+      device.createBindGroupLayout({
+        entries: groupDescriptor.map(({ layout }, idx) => ({
+          binding: idx,
+          ...layout,
+        })),
+      })
+    );
 
-    this.bindGroup = device.createBindGroup({
-      layout: this.bindGroupLayout,
-      entries: descriptors.flatMap(({ layout, bufferName }, idx) =>
-        layout
-          ? { binding: idx, resource: { buffer: this.buffers[bufferName] } }
-          : []
-      ),
-    });
+    this.bindGroups = descriptors.map((groupDescriptor, groupIdx) =>
+      device.createBindGroup({
+        layout: this.bindGroupLayouts[groupIdx],
+        entries: groupDescriptor.map(({ bufferName }, bindingIdx) => ({
+          binding: bindingIdx,
+          resource: { buffer: this.buffers[bufferName] },
+        })),
+      })
+    );
   }
 
   private createPipeline(descriptor: PipelineDescriptor) {
     const { vertex, fragment } = descriptor;
 
-    const { device, bindGroupLayout } = this;
+    const { device, bindGroupLayouts } = this;
 
     this.pipeline = device.createRenderPipeline({
       layout: device.createPipelineLayout({
-        bindGroupLayouts: [bindGroupLayout],
+        bindGroupLayouts: bindGroupLayouts,
       }),
       vertex: {
         module: device.createShaderModule({ code: vertex.code }),

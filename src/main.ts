@@ -127,28 +127,30 @@ const instance = await GPUHelper.create({
     },
   ],
   bufferAndBindGroupDescriptor: [
-    {
-      bufferName: 'timeUniformBuffer',
-      bufferDescriptor: {
-        size: Float32Array.BYTES_PER_ELEMENT,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+    [
+      {
+        bufferName: 'timeUniformBuffer',
+        bufferDescriptor: {
+          size: Float32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+        },
+        layout: {
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'uniform' },
+        },
       },
-      layout: {
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'uniform' },
+      {
+        bufferName: 'transformationMatricesBuffer',
+        bufferDescriptor: {
+          size: instanceTransformMatrices.byteLength,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        },
+        layout: {
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'uniform' },
+        },
       },
-    },
-    {
-      bufferName: 'transformationMatricesBuffer',
-      bufferDescriptor: {
-        size: instanceTransformMatrices.byteLength,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      },
-      layout: {
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'uniform' },
-      },
-    },
+    ],
   ],
   pipelineDescriptor: {
     vertex: {
@@ -167,7 +169,7 @@ const instance = await GPUHelper.create({
       vertexBuffer,
       indexBuffer,
     } = this.buffers;
-    const { ctx, device, pipeline, bindGroup } = this;
+    const { ctx, device, pipeline, bindGroups } = this;
 
     timeBuffer[0] = time / 1000 - start;
 
@@ -190,7 +192,7 @@ const instance = await GPUHelper.create({
     );
 
     passEncoder.setPipeline(pipeline);
-    passEncoder.setBindGroup(0, bindGroup);
+    passEncoder.setBindGroup(0, bindGroups[0]);
     passEncoder.setVertexBuffer(0, vertexBuffer);
     passEncoder.setIndexBuffer(indexBuffer, 'uint16');
     passEncoder.drawIndexed(indices.length, instanceCount);
