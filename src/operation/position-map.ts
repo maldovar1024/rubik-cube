@@ -2,6 +2,17 @@ import { ClockwiseKeys, CounterClockwiseKeys, HalfTurnKeys } from './types';
 
 type PositionMap = Record<number, number | undefined>;
 
+/*
+ *        6 15 24
+ *        7 16 25
+ *        8 17 26
+ * 6 7 8  8 17 26  26 25 24  24 15  6
+ * 3 4 5  5 14 23  23 22 21  21 12  3
+ * 0 1 2  2 11 20  20 19 18  18  9  0
+ *        2 11 20
+ *        1 10 19
+ *        0  9 18
+ */
 const clockwisePositionMap: Record<ClockwiseKeys, PositionMap> = {
   F: {
     2: 8,
@@ -34,14 +45,14 @@ const clockwisePositionMap: Record<ClockwiseKeys, PositionMap> = {
     24: 18,
   },
   B: {
-    0: 6,
-    3: 15,
-    6: 24,
-    9: 3,
-    15: 21,
-    18: 0,
-    21: 9,
-    24: 18,
+    0: 18,
+    3: 9,
+    6: 0,
+    9: 21,
+    15: 3,
+    18: 24,
+    21: 15,
+    24: 6,
   },
   U: {
     8: 6,
