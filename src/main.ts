@@ -12,7 +12,6 @@ import {
   vertexBufferLayout,
   vertices,
 } from './cube';
-import { GPUHelper } from './gpu-helper';
 import { Operation } from './operation';
 
 import './style.css';
@@ -102,78 +101,178 @@ function updateTransformationMatrix() {
   }
 }
 
-const timeBuffer = new Float32Array(1);
+export interface Texture {
+  texture: GPUTexture;
+  view: GPUTextureView;
+}
 
-const start = performance.now() / 1000;
+export class GPUHelper {
+  static async create(ctx: GPUCanvasContext) {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw Error("Couldn't request WebGPU adapter.");
 
-const instance = await GPUHelper.create({
-  canvas,
-  bufferInitDescriptors: [
-    {
-      bufferName: 'vertexBuffer',
-      bufferDescriptor: {
-        size: Float32Array.BYTES_PER_ELEMENT * vertices.length,
+    const device = await adapter.requestDevice();
+
+    return new this(ctx, device);
+  }
+
+  createDepthTexture() {
+    const texture = this.device.createTexture({
+      size: this.presentationSize,
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    return {
+      texture,
+      view: texture.createView(),
+    };
+  }
+
+  constructor(public ctx: GPUCanvasContext, public device: GPUDevice) {
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+
+    ctx.configure({
+      device,
+      format: this.presentationFormat,
+      alphaMode: 'premultiplied',
+    });
+
+    this.depthTexture = this.createDepthTexture();
+
+    this.createTransformBindGroup();
+    this.createRenderPipeline();
+
+    this.vertexBuffer = this.createBufferInit(
+      {
+        size: vertices.byteLength,
         usage: GPUBufferUsage.VERTEX,
       },
-      contents: vertices.buffer,
-    },
-    {
-      bufferName: 'indexBuffer',
-      bufferDescriptor: {
-        size: Uint16Array.BYTES_PER_ELEMENT * indices.length,
+      vertices.buffer
+    );
+    this.indexBuffer = this.createBufferInit(
+      {
+        size: indices.byteLength,
         usage: GPUBufferUsage.INDEX,
       },
-      contents: indices.buffer,
-    },
-  ],
-  bufferAndBindGroupDescriptor: [
-    [
-      {
-        bufferName: 'timeUniformBuffer',
-        bufferDescriptor: {
-          size: Float32Array.BYTES_PER_ELEMENT,
-          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-        },
-        layout: {
-          visibility: GPUShaderStage.VERTEX,
-          buffer: { type: 'uniform' },
-        },
-      },
-      {
-        bufferName: 'transformationMatricesBuffer',
-        bufferDescriptor: {
-          size: instanceTransformMatrices.byteLength,
-          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        },
-        layout: {
-          visibility: GPUShaderStage.VERTEX,
-          buffer: { type: 'uniform' },
-        },
-      },
-    ],
-  ],
-  pipelineDescriptor: {
-    vertex: {
-      code: vert,
-      buffers: [vertexBufferLayout],
-    },
-    fragment: {
-      code: frag,
-    },
-  },
+      indices.buffer
+    );
 
-  frame(time) {
+    requestAnimationFrame(this.frame);
+  }
+
+  getRenderPassDescriptor(
+    currentTextureView: GPUTextureView
+  ): GPURenderPassDescriptor {
+    return {
+      colorAttachments: [
+        {
+          view: currentTextureView,
+          clearValue: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+      depthStencilAttachment: {
+        view: this.depthTexture.view,
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    };
+  }
+
+  createBufferInit(descriptor: GPUBufferDescriptor, content: ArrayBuffer) {
+    const buffer = this.device.createBuffer({
+      ...descriptor,
+      mappedAtCreation: true,
+    });
+    new Uint8Array(buffer.getMappedRange()).set(new Uint8Array(content));
+    buffer.unmap();
+    return buffer;
+  }
+
+  get presentationSize(): [number, number] {
+    const { width, height } = this.ctx.canvas;
+    return [width, height];
+  }
+
+  presentationFormat: GPUTextureFormat;
+
+  depthTexture: Texture;
+
+  transformationMatricesBuffer!: GPUBuffer;
+  transformationMatricesBindGroupLayout!: GPUBindGroupLayout;
+  transformationMatricesBindGroup!: GPUBindGroup;
+
+  createTransformBindGroup() {
+    this.transformationMatricesBuffer = this.device.createBuffer({
+      size: instanceTransformMatrices.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.transformationMatricesBindGroupLayout =
+      this.device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX,
+            buffer: { type: 'uniform' },
+          },
+        ],
+      });
+    this.transformationMatricesBindGroup = this.device.createBindGroup({
+      layout: this.transformationMatricesBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: this.transformationMatricesBuffer },
+        },
+      ],
+    });
+  }
+
+  renderPipeline!: GPURenderPipeline;
+
+  createRenderPipeline() {
     const {
-      timeUniformBuffer,
-      transformationMatricesBuffer,
-      vertexBuffer,
-      indexBuffer,
-    } = this.buffers;
-    const { ctx, device, pipeline, bindGroups } = this;
+      device,
+      transformationMatricesBindGroupLayout: transformBindGroupLayout,
+    } = this;
 
-    timeBuffer[0] = time / 1000 - start;
+    this.renderPipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [transformBindGroupLayout],
+      }),
+      vertex: {
+        module: device.createShaderModule({ code: vert }),
+        entryPoint: 'main',
+        buffers: [vertexBufferLayout],
+      },
+      fragment: {
+        module: device.createShaderModule({ code: frag }),
+        entryPoint: 'main',
+        targets: [{ format: this.presentationFormat }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'back' },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+        format: 'depth24plus',
+      },
+    });
+  }
 
-    device.queue.writeBuffer(timeUniformBuffer, 0, timeBuffer);
+  vertexBuffer: GPUBuffer;
+  indexBuffer: GPUBuffer;
+
+  frame = () => {
+    this.render();
+    requestAnimationFrame(this.frame);
+  }
+
+  render() {
+    const { transformationMatricesBuffer, vertexBuffer, indexBuffer } = this;
+    const { ctx, device, renderPipeline, transformationMatricesBindGroup } =
+      this;
 
     updateTransformationMatrix();
     device.queue.writeBuffer(
@@ -191,15 +290,15 @@ const instance = await GPUHelper.create({
       this.getRenderPassDescriptor(textureView)
     );
 
-    passEncoder.setPipeline(pipeline);
-    passEncoder.setBindGroup(0, bindGroups[0]);
+    passEncoder.setPipeline(renderPipeline);
+    passEncoder.setBindGroup(0, transformationMatricesBindGroup);
     passEncoder.setVertexBuffer(0, vertexBuffer);
     passEncoder.setIndexBuffer(indexBuffer, 'uint16');
     passEncoder.drawIndexed(indices.length, instanceCount);
     passEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
-  },
-});
+  }
+}
 
-instance.start();
+GPUHelper.create(canvas.getContext('webgpu')!);

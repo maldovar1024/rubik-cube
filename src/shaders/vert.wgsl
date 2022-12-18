@@ -1,5 +1,4 @@
-@group(0) @binding(0) var<uniform> time: f32;
-@group(0) @binding(1) var<uniform> transformMatrics: array<mat4x4<f32>, 27>;
+@group(0) @binding(0) var<uniform> transformMatrics: array<mat4x4<f32>, 27>;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
